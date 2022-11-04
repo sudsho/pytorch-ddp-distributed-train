@@ -1,0 +1,23 @@
+# default training config
+
+data:
+  name: imagenette
+  root: ./data
+  num_classes: 10
+  image_size: 224
+
+model:
+  arch: resnet50
+  pretrained: false
+
+train:
+  epochs: 5
+  batch_per_gpu: 64
+  lr: 0.1
+  momentum: 0.9
+  weight_decay: 1.0e-4
+  num_workers: 4
+
+ddp:
+  backend: nccl
+  n_gpus: 1
