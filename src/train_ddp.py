@@ -13,6 +13,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
 from src.data import build_dataset
+from src.eval import validate
 from src.model import build_model
 from src.utils import load_config, setup_logger
 
@@ -42,11 +43,20 @@ def main():
     log.info(f"world={world} local_rank={local_rank}")
 
     train_ds = build_dataset(cfg["data"]["root"], "train", cfg["data"]["image_size"])
+    val_ds = build_dataset(cfg["data"]["root"], "val", cfg["data"]["image_size"])
     sampler = DistributedSampler(train_ds, num_replicas=world, rank=rank, shuffle=True)
+    val_sampler = DistributedSampler(val_ds, num_replicas=world, rank=rank, shuffle=False)
     loader = DataLoader(
         train_ds,
         batch_size=cfg["train"]["batch_per_gpu"],
         sampler=sampler,
+        num_workers=cfg["train"]["num_workers"],
+        pin_memory=True,
+    )
+    val_loader = DataLoader(
+        val_ds,
+        batch_size=cfg["train"]["batch_per_gpu"],
+        sampler=val_sampler,
         num_workers=cfg["train"]["num_workers"],
         pin_memory=True,
     )
@@ -74,8 +84,12 @@ def main():
             loss.backward()
             opt.step()
             running += loss.item()
+        val_loss, val_acc = validate(model, val_loader, torch.device(f"cuda:{local_rank}"), distributed=True)
         if rank == 0:
-            log.info(f"epoch {epoch} avg_loss={running/max(1,len(loader)):.4f}")
+            log.info(
+                f"epoch {epoch} avg_loss={running/max(1,len(loader)):.4f} "
+                f"val_loss={val_loss:.4f} val_acc={val_acc:.4f}"
+            )
 
     cleanup_dist()
 
