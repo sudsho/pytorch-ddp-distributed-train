@@ -21,3 +21,7 @@ train:
 ddp:
   backend: nccl
   n_gpus: 1
+
+amp:
+  enabled: true
+  dtype: float16

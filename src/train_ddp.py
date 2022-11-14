@@ -71,6 +71,9 @@ def main():
         weight_decay=cfg["train"]["weight_decay"],
     )
 
+    use_amp = cfg.get("amp", {}).get("enabled", False)
+    scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+
     for epoch in range(cfg["train"]["epochs"]):
         sampler.set_epoch(epoch)
         model.train()
@@ -79,10 +82,12 @@ def main():
             x = x.cuda(local_rank, non_blocking=True)
             y = y.cuda(local_rank, non_blocking=True)
             opt.zero_grad()
-            logits = model(x)
-            loss = crit(logits, y)
-            loss.backward()
-            opt.step()
+            with torch.cuda.amp.autocast(enabled=use_amp):
+                logits = model(x)
+                loss = crit(logits, y)
+            scaler.scale(loss).backward()
+            scaler.step(opt)
+            scaler.update()
             running += loss.item()
         val_loss, val_acc = validate(model, val_loader, torch.device(f"cuda:{local_rank}"), distributed=True)
         if rank == 0:
