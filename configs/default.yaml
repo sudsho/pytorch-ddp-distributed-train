@@ -18,6 +18,8 @@ train:
   weight_decay: 1.0e-4
   num_workers: 4
   grad_accum_steps: 1
+  scheduler: cosine   # one of: none | cosine | step
+  warmup_epochs: 1
 
 ddp:
   backend: nccl
