@@ -20,6 +20,7 @@ def _nullcontext():
 from src.data import build_dataset
 from src.eval import validate
 from src.model import build_model
+from src.sched import build_scheduler
 from src.utils import load_config, setup_logger
 
 
@@ -79,6 +80,7 @@ def main():
     use_amp = cfg.get("amp", {}).get("enabled", False)
     scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
     accum = max(1, int(cfg["train"].get("grad_accum_steps", 1)))
+    scheduler = build_scheduler(opt, cfg, len(loader) // accum)
 
     for epoch in range(cfg["train"]["epochs"]):
         sampler.set_epoch(epoch)
@@ -102,6 +104,8 @@ def main():
                 scaler.step(opt)
                 scaler.update()
                 opt.zero_grad()
+                if scheduler is not None:
+                    scheduler.step()
             running += loss.item() * accum
         val_loss, val_acc = validate(model, val_loader, torch.device(f"cuda:{local_rank}"), distributed=True)
         if rank == 0:
