@@ -17,6 +17,7 @@ train:
   momentum: 0.9
   weight_decay: 1.0e-4
   num_workers: 4
+  grad_accum_steps: 1
 
 ddp:
   backend: nccl

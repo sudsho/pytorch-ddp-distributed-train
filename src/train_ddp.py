@@ -73,22 +73,25 @@ def main():
 
     use_amp = cfg.get("amp", {}).get("enabled", False)
     scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+    accum = max(1, int(cfg["train"].get("grad_accum_steps", 1)))
 
     for epoch in range(cfg["train"]["epochs"]):
         sampler.set_epoch(epoch)
         model.train()
         running = 0.0
-        for x, y in loader:
+        opt.zero_grad()
+        for step, (x, y) in enumerate(loader):
             x = x.cuda(local_rank, non_blocking=True)
             y = y.cuda(local_rank, non_blocking=True)
-            opt.zero_grad()
             with torch.cuda.amp.autocast(enabled=use_amp):
                 logits = model(x)
-                loss = crit(logits, y)
+                loss = crit(logits, y) / accum
             scaler.scale(loss).backward()
-            scaler.step(opt)
-            scaler.update()
-            running += loss.item()
+            if (step + 1) % accum == 0:
+                scaler.step(opt)
+                scaler.update()
+                opt.zero_grad()
+            running += loss.item() * accum
         val_loss, val_acc = validate(model, val_loader, torch.device(f"cuda:{local_rank}"), distributed=True)
         if rank == 0:
             log.info(
