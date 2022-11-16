@@ -4,6 +4,7 @@ Launch with torchrun:
   torchrun --standalone --nproc_per_node=2 -m src.train_ddp --config configs/default.yaml
 """
 import argparse
+import contextlib
 import os
 import torch
 import torch.distributed as dist
@@ -11,6 +12,10 @@ import torch.nn as nn
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
+
+
+def _nullcontext():
+    return contextlib.nullcontext()
 
 from src.data import build_dataset
 from src.eval import validate
@@ -83,11 +88,17 @@ def main():
         for step, (x, y) in enumerate(loader):
             x = x.cuda(local_rank, non_blocking=True)
             y = y.cuda(local_rank, non_blocking=True)
-            with torch.cuda.amp.autocast(enabled=use_amp):
-                logits = model(x)
-                loss = crit(logits, y) / accum
-            scaler.scale(loss).backward()
-            if (step + 1) % accum == 0:
+
+            is_sync_step = (step + 1) % accum == 0
+            # avoid all-reduce on intermediate accum steps -- it's wasted bandwidth.
+            ctx = model.no_sync() if not is_sync_step else _nullcontext()
+            with ctx:
+                with torch.cuda.amp.autocast(enabled=use_amp):
+                    logits = model(x)
+                    loss = crit(logits, y) / accum
+                scaler.scale(loss).backward()
+
+            if is_sync_step:
                 scaler.step(opt)
                 scaler.update()
                 opt.zero_grad()
