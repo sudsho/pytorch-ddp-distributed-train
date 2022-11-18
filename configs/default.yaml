@@ -9,6 +9,7 @@ data:
 model:
   arch: resnet50
   pretrained: false
+  grad_checkpoint: false
 
 train:
   epochs: 5
