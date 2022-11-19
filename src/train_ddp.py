@@ -67,8 +67,13 @@ def main():
         pin_memory=True,
     )
 
-    model = build_model(cfg["model"]["arch"], cfg["data"]["num_classes"]).cuda(local_rank)
-    model = DDP(model, device_ids=[local_rank])
+    model = build_model(
+        cfg["model"]["arch"],
+        cfg["data"]["num_classes"],
+        grad_checkpoint=cfg["model"].get("grad_checkpoint", False),
+    ).cuda(local_rank)
+    # find_unused_parameters=False is correct unless we have weird dynamic graphs.
+    model = DDP(model, device_ids=[local_rank], find_unused_parameters=False)
     crit = nn.CrossEntropyLoss()
     opt = torch.optim.SGD(
         model.parameters(),
