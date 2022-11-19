@@ -21,7 +21,13 @@ from src.data import build_dataset
 from src.eval import validate
 from src.model import build_model
 from src.sched import build_scheduler
-from src.utils import load_config, setup_logger
+from src.utils import (
+    load_config,
+    setup_logger,
+    mlflow_init,
+    mlflow_log_metrics,
+    mlflow_log_params,
+)
 
 
 def setup_dist(backend="nccl"):
@@ -87,6 +93,17 @@ def main():
     accum = max(1, int(cfg["train"].get("grad_accum_steps", 1)))
     scheduler = build_scheduler(opt, cfg, len(loader) // accum)
 
+    mlf_run = mlflow_init("ddp-imagenette", run_name=f"world{world}")
+    mlflow_log_params({
+        "world_size": world,
+        "arch": cfg["model"]["arch"],
+        "batch_per_gpu": cfg["train"]["batch_per_gpu"],
+        "lr": cfg["train"]["lr"],
+        "amp": use_amp,
+        "accum": accum,
+        "grad_checkpoint": cfg["model"].get("grad_checkpoint", False),
+    })
+
     for epoch in range(cfg["train"]["epochs"]):
         sampler.set_epoch(epoch)
         model.train()
@@ -118,6 +135,18 @@ def main():
                 f"epoch {epoch} avg_loss={running/max(1,len(loader)):.4f} "
                 f"val_loss={val_loss:.4f} val_acc={val_acc:.4f}"
             )
+            mlflow_log_metrics(
+                {
+                    "train_loss": running / max(1, len(loader)),
+                    "val_loss": val_loss,
+                    "val_acc": val_acc,
+                },
+                step=epoch,
+            )
+
+    if mlf_run is not None:
+        import mlflow
+        mlflow.end_run()
 
     cleanup_dist()
 
