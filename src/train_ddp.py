@@ -6,6 +6,7 @@ Launch with torchrun:
 import argparse
 import contextlib
 import os
+import time
 import torch
 import torch.distributed as dist
 import torch.nn as nn
@@ -109,6 +110,8 @@ def main():
         sampler.set_epoch(epoch)
         model.train()
         running = 0.0
+        n_imgs = 0
+        ep_t0 = time.time()
         opt.zero_grad()
         for step, (x, y) in enumerate(loader):
             x = x.cuda(local_rank, non_blocking=True)
@@ -130,17 +133,24 @@ def main():
                 if scheduler is not None:
                     scheduler.step()
             running += loss.item() * accum
+            n_imgs += x.size(0)
+        ep_time = time.time() - ep_t0
+        # local imgs * world = global imgs (since each rank sees its own shard)
+        global_imgs = n_imgs * world
+        thpt = global_imgs / max(1e-6, ep_time)
         val_loss, val_acc = validate(model, val_loader, torch.device(f"cuda:{local_rank}"), distributed=True)
         if rank == 0:
             log.info(
                 f"epoch {epoch} avg_loss={running/max(1,len(loader)):.4f} "
-                f"val_loss={val_loss:.4f} val_acc={val_acc:.4f}"
+                f"val_loss={val_loss:.4f} val_acc={val_acc:.4f} "
+                f"imgs/s={thpt:.1f}"
             )
             mlflow_log_metrics(
                 {
                     "train_loss": running / max(1, len(loader)),
                     "val_loss": val_loss,
                     "val_acc": val_acc,
+                    "imgs_per_sec": thpt,
                 },
                 step=epoch,
             )
