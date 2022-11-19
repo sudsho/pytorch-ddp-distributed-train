@@ -17,6 +17,7 @@ from torch.utils.data.distributed import DistributedSampler
 def _nullcontext():
     return contextlib.nullcontext()
 
+from src.checkpoint import save_checkpoint
 from src.data import build_dataset
 from src.eval import validate
 from src.model import build_model
@@ -143,6 +144,10 @@ def main():
                 },
                 step=epoch,
             )
+        save_checkpoint(
+            os.path.join("checkpoints", f"epoch_{epoch}.pt"),
+            model, opt, scaler, epoch, scheduler,
+        )
 
     if mlf_run is not None:
         import mlflow
