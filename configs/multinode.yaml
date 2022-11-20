@@ -1,0 +1,34 @@
+# multi-node config. assumes 2 nodes, 4 gpus each.
+# launch on each node with torchrun and matching --nnodes / --node_rank.
+
+data:
+  name: imagenette
+  root: ./data
+  num_classes: 10
+  image_size: 224
+
+model:
+  arch: resnet50
+  pretrained: false
+  grad_checkpoint: false
+
+train:
+  epochs: 10
+  batch_per_gpu: 64
+  lr: 0.4              # scaled with world_size = 8
+  momentum: 0.9
+  weight_decay: 1.0e-4
+  num_workers: 6
+  grad_accum_steps: 1
+  scheduler: cosine
+  warmup_epochs: 1
+
+ddp:
+  backend: nccl
+  n_gpus: 8
+  rdzv_backend: c10d
+  rdzv_endpoint: 10.0.0.1:29500   # set to your master addr
+
+amp:
+  enabled: true
+  dtype: float16
