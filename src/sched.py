@@ -6,12 +6,14 @@ import math
 
 
 def build_scheduler(opt, cfg, steps_per_epoch):
+    """steps_per_epoch should already account for grad_accum_steps.
+    Caller is expected to pass len(loader) // accum, otherwise warmup ends way too early.
+    """
     name = cfg["train"].get("scheduler", "none")
     epochs = cfg["train"]["epochs"]
     warmup = cfg["train"].get("warmup_epochs", 0)
-    total_steps = epochs * steps_per_epoch
-    warmup_steps = warmup * steps_per_epoch
-    base_lr = cfg["train"]["lr"]
+    total_steps = max(1, epochs * steps_per_epoch)
+    warmup_steps = max(0, warmup * steps_per_epoch)
 
     if name == "none":
         return None
