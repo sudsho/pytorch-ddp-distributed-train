@@ -1,0 +1,40 @@
+version: "3.8"
+
+# Two-node DDP simulation on a single host using NCCL over TCP.
+# Each "node" gets its own container with NCCL_SOCKET_IFNAME pinned.
+# This is mostly for testing the rdzv handshake; you'd normally just run torchrun --standalone.
+
+services:
+  master:
+    build: .
+    image: pytorch-ddp-distributed-train
+    shm_size: 8gb
+    environment:
+      - MASTER_ADDR=master
+      - MASTER_PORT=29500
+      - WORLD_SIZE=2
+      - RANK=0
+      - LOCAL_RANK=0
+    command: >
+      python -m src.train_ddp --config configs/multinode.yaml
+    volumes:
+      - ./data:/app/data
+      - ./checkpoints:/app/checkpoints
+
+  worker:
+    build: .
+    image: pytorch-ddp-distributed-train
+    shm_size: 8gb
+    depends_on:
+      - master
+    environment:
+      - MASTER_ADDR=master
+      - MASTER_PORT=29500
+      - WORLD_SIZE=2
+      - RANK=1
+      - LOCAL_RANK=0
+    command: >
+      python -m src.train_ddp --config configs/multinode.yaml
+    volumes:
+      - ./data:/app/data
+      - ./checkpoints:/app/checkpoints

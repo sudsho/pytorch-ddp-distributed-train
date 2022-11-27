@@ -1,0 +1,31 @@
+# Move this file to .github/workflows/test.yml when you have the workflow scope on your token.
+# Until then it lives here as a reference template.
+
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10"]
+    steps:
+      - uses: actions/checkout@v3
+      - name: setup python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: install
+        run: |
+          python -m pip install --upgrade pip
+          # use cpu-only torch in CI; saves us from cuda wheels
+          pip install torch==1.13.0+cpu torchvision==0.14.0+cpu \
+            --extra-index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt
+      - name: pytest
+        run: pytest -q tests/
