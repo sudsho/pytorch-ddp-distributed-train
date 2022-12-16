@@ -1,6 +1,8 @@
-"""Single-step smoke test on a tiny synthetic dataset.
+"""Single-step smoke tests on a tiny synthetic dataset.
 
-Skipped if CUDA isn't available since DDP would be a pain in CI without GPUs.
+test_one_step_on_cpu runs a plain single-process forward+backward.
+test_amp_path is a single-GPU AMP step, skipped when CUDA isn't available.
+Neither test exercises the DDP path.
 """
 import os
 import pytest

@@ -1,6 +1,3 @@
-# Move this file to .github/workflows/test.yml when you have the workflow scope on your token.
-# Until then it lives here as a reference template.
-
 name: tests
 
 on:

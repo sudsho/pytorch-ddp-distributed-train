@@ -25,10 +25,6 @@ train:
 
 ddp:
   backend: nccl
-  n_gpus: 8
-  rdzv_backend: c10d
-  rdzv_endpoint: 10.0.0.1:29500   # set to your master addr
 
 amp:
   enabled: true
-  dtype: float16
