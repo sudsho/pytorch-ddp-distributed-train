@@ -1,15 +1,19 @@
 PYTHON ?= python
 CONFIG ?= configs/default.yaml
 
-.PHONY: help install data single ddp-2gpu ddp-4gpu accelerate bench test clean
+.PHONY: help install data smoke single ddp-2gpu ddp-4gpu accelerate bench test clean
 
 help:
+	@echo "smoke         offline CPU DDP smoke (2 gloo procs, no GPU/data needed)"
 	@echo "single        run single-gpu baseline"
 	@echo "ddp-2gpu      torchrun on 2 procs (single node)"
 	@echo "ddp-4gpu      torchrun on 4 procs (single node)"
 	@echo "accelerate    accelerate launch variant"
 	@echo "bench         throughput benchmark across sizes"
 	@echo "test          pytest"
+
+smoke:
+	$(PYTHON) scripts/smoke.py
 
 install:
 	pip install -r requirements.txt

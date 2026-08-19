@@ -2,6 +2,57 @@
 
 Single-node multi-GPU training reference with PyTorch DDP. ResNet50 on Imagenette as the workload.
 
+## Quick start (runs offline)
+
+The full trainer (`src/train_ddp.py`) targets multi-GPU with the `nccl` backend and the Imagenette dataset, so it needs GPUs and a dataset download. To prove the DDP wiring without any of that, there is a CPU-only smoke that runs real DistributedDataParallel across 2 processes with the `gloo` backend on a tiny synthetic dataset. No CUDA, no download.
+
+```bash
+make smoke        # or: python scripts/smoke.py
+```
+
+Real output on a CPU box (torch 2.5.1, Python 3.11):
+
+```
+spawning 2 gloo processes on CPU ...
+[rank 0/2] gloo up on 127.0.0.1:29529, backend=gloo, shard=32 samples
+[rank 1/2] gloo up on 127.0.0.1:29529, backend=gloo, shard=32 samples
+[rank 0] step  0 global_mean_loss=1.6909
+[rank 1] step  0 global_mean_loss=1.6909
+[rank 0] step 10 global_mean_loss=0.0010
+[rank 0] step 20 global_mean_loss=0.5242
+[rank 0] step 30 global_mean_loss=0.4696
+[rank 0] step 39 global_mean_loss=0.0014
+[rank 0] checkpoint saved -> checkpoints\smoke_epoch0.pt
+
+==== DDP CPU smoke result ====
+mode                : 2 processes (gloo)
+backend             : gloo
+loss (mean first3 -> last3 steps, rank-averaged): 1.2116 -> 0.0083 (DECREASED)
+gradients all-reduced: spread across ranks = 0.00e+00 (SYNCED)
+params in sync      : spread across ranks = 0.00e+00 (IN SYNC)
+checkpoint (rank 0) : checkpoints\smoke_epoch0.pt (exists)
+
+SMOKE PASSED
+```
+
+What the smoke proves: the loss decreases, gradients are all-reduced across ranks (the chosen gradient is bit-identical on every rank right after `backward`, so the spread is `0.00e+00`), model parameters stay in sync across ranks, and rank 0 (only) writes a checkpoint. The rank-averaged loss printed by both ranks is identical every step, which is itself a sign the ranks never diverge. A couple of harmless `socket.cpp ... failed to connect` warnings can appear on Windows while gloo resolves the loopback rendezvous; the all-reduce still succeeds.
+
+If spawning 2 processes ever fails in your environment, the smoke automatically falls back to a single-process `gloo` group (`world_size=1`) that still exercises the DDP wrapper and `all_reduce`. That fallback cannot prove cross-rank gradient sync and says so. You can force it with `python scripts/smoke.py --procs 1`.
+
+Run the tests (the DDP path is covered by `tests/test_ddp_smoke.py`, which shells out to the smoke):
+
+```bash
+make test         # or: python -m pytest -q tests/
+# 13 passed
+```
+
+### What still needs real hardware
+
+- **Multi-GPU / `nccl`**: `make ddp-2gpu` / `make ddp-4gpu` run `torchrun` with the `nccl` backend and `.cuda()` placement. They need actual GPUs on the box.
+- **Multi-node**: `configs/multinode.yaml` and the `torchrun` rendezvous flags need a real multi-node cluster (`MASTER_ADDR` on the rank-0 host, matching `--nnodes` / `--node_rank`).
+- **Dataset**: `make data` downloads Imagenette (~1.5 GB). The smoke sidesteps this with synthetic tensors.
+- **AMP**: `torch.cuda.amp` autocast + `GradScaler` only kick in on CUDA; on CPU they are no-ops.
+
 ## What's in the repo
 
 - Single-GPU baseline (`src/train_single.py`) for sanity checking before going parallel.
